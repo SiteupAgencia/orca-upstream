@@ -519,7 +519,13 @@ describe('DaemonServer', () => {
   })
 
   describe('idle self-exit', () => {
-    async function startServerWithIdleExit(graceMs: number): Promise<{
+    async function startServerWithIdleExit(
+      graceMs: number,
+      // Why: lets a test seed a session before start() can arm the countdown, so
+      // "never fires while a session is alive" is proven by the timer never
+      // arming rather than by racing a cancel against a short grace.
+      beforeStart?: (daemon: DaemonServerPrivate) => Promise<void>
+    ): Promise<{
       idleExited: Promise<void>
       onIdleExit: ReturnType<typeof vi.fn>
       lastSubprocess: () => ReturnType<typeof createMockSubprocess> | null
@@ -540,6 +546,9 @@ describe('DaemonServer', () => {
         onIdleExit,
         idleExitGraceMs: graceMs
       })
+      if (beforeStart) {
+        await beforeStart(server as unknown as DaemonServerPrivate)
+      }
       await server.start()
       return { idleExited, onIdleExit, lastSubprocess: () => subprocess }
     }
@@ -618,16 +627,19 @@ describe('DaemonServer', () => {
     })
 
     it('never fires while a session is alive and exits after the last session ends', async () => {
-      const { idleExited, onIdleExit, lastSubprocess } = await startServerWithIdleExit(75)
-      const daemon = server as unknown as DaemonServerPrivate
-
-      // Create a session with zero connected clients — the exact state the
-      // daemon exists for (holding sessions across app restarts).
-      await daemon.routeRequest('ghost-client', {
-        id: 'req-idle-1',
-        type: 'createOrAttach',
-        payload: { sessionId: 'idle-session', cols: 80, rows: 24 }
-      })
+      const { idleExited, onIdleExit, lastSubprocess } = await startServerWithIdleExit(
+        75,
+        // Create a session with zero connected clients — the exact state the
+        // daemon exists for (holding sessions across app restarts) — before
+        // start() can arm the countdown, so the guarantee holds without a race.
+        async (daemon) => {
+          await daemon.routeRequest('ghost-client', {
+            id: 'req-idle-1',
+            type: 'createOrAttach',
+            payload: { sessionId: 'idle-session', cols: 80, rows: 24 }
+          })
+        }
+      )
       expect(idleArmed()).toBe(false)
 
       // Bounded real-time check on top of the deterministic assertion above:

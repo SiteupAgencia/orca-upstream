@@ -516,4 +516,44 @@ describe('TerminalHost', () => {
       expect(liveSub.dispose).toHaveBeenCalled()
     })
   })
+
+  describe('onSessionCountChange', () => {
+    it('notifies on create, on natural-exit reap, and on dispose', async () => {
+      // Why: the daemon server re-evaluates idle-exit eligibility on this
+      // callback, so every session-map transition must fire it — a missed
+      // notify would strand the idle countdown against a stale session count.
+      const onSessionCountChange = vi.fn()
+      host.dispose()
+      host = new TerminalHost({
+        spawnSubprocess: spawnFn as MockSpawnFn,
+        onSessionCountChange
+      })
+
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      expect(onSessionCountChange).toHaveBeenCalledTimes(1)
+      expect(host.sessionCount()).toBe(1)
+
+      // Natural exit reaps the session and must notify so the count reaches 0.
+      lastSubprocess._onExitCb?.(0)
+      expect(onSessionCountChange).toHaveBeenCalledTimes(2)
+      expect(host.sessionCount()).toBe(0)
+
+      // A live session remaining at dispose must notify too.
+      await host.createOrAttach({
+        sessionId: 'session-2',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      expect(onSessionCountChange).toHaveBeenCalledTimes(3)
+
+      host.dispose()
+      expect(onSessionCountChange).toHaveBeenCalledTimes(4)
+    })
+  })
 })
