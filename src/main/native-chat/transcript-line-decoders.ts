@@ -32,6 +32,17 @@ export function decodeClaudeTranscriptLine(
   if (blocks.length === 0) {
     return null
   }
+  // Why: Claude stamps injected user turns structurally (isMeta on caveats and
+  // inter-agent messages, isCompactSummary on continuation summaries) — drop
+  // them here so chat never renders them as the human's own bubbles. Turns
+  // carrying tool results are kept: they are genuine tool output.
+  if (
+    role === 'user' &&
+    (record.isMeta === true || record.isSynthetic === true || record.isCompactSummary === true) &&
+    !blocks.some((block) => block.type === 'tool-result')
+  ) {
+    return null
+  }
   const messageId = extractString(record.uuid) ?? extractString(message?.id)
   return {
     id: messageId ?? fallbackId,
