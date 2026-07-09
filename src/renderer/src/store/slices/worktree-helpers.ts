@@ -113,7 +113,7 @@ export type WorktreeSlice = {
   hasHydratedWorktreePurge: boolean
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<boolean>
-  fetchAllWorktrees: () => Promise<void>
+  fetchAllWorktrees: (options?: { hydrationPurge?: 'allow' | 'defer' }) => Promise<void>
   fetchWorktreeLineage: () => Promise<void>
   updateWorktreeLineage: (
     worktreeId: string,
@@ -179,7 +179,10 @@ export type WorktreeSlice = {
   removeWorktree: (
     worktreeId: string,
     force?: boolean,
-    options?: { suppressPreservedBranchToast?: boolean }
+    // 'forget-local' drops the workspace from Orca only (no remote Git/FS work)
+    // for workspaces pinned to a removed/disconnected SSH host. Reuses the same
+    // renderer-side teardown/purge as a normal remove.
+    options?: { mode?: 'remove' | 'forget-local'; suppressPreservedBranchToast?: boolean }
   ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
   markWorktreesDeleting: (worktreeIds: readonly string[]) => void
   markWorktreesQueuedForDeletion: (worktreeIds: readonly string[]) => void

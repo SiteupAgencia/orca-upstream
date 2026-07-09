@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: scan and IPC process-liveness tests share
-   hoisted Electron/git provider mocks; splitting would duplicate brittle setup. */
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ipcMain } from 'electron'
